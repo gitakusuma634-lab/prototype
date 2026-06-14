@@ -1546,6 +1546,135 @@ body{display:flex;flex-direction:column;height:100dvh;}
 
 } /* end @media (min-width: 1024px) */
 
+
+/* ══════════════════════════════════════════════════════
+   3D CARD EFFECT — Premium Aceternity-style
+   Berlaku untuk semua <section data-card3d>
+   dan juga .glass-card, article.pi, article.dk-item
+══════════════════════════════════════════════════════ */
+
+/* Layer wrapper yang menerima transform perspektif */
+[data-card3d] {
+  --c3d-rotX: 0deg;
+  --c3d-rotY: 0deg;
+  --c3d-glareX: 50%;
+  --c3d-glareY: 50%;
+  --c3d-glareOp: 0;
+  --c3d-shadowX: 0px;
+  --c3d-shadowY: 8px;
+  --c3d-shadowBlur: 32px;
+  --c3d-scale: 1;
+  --c3d-lift: 0px;
+
+  transform-style: preserve-3d;
+  /* Perspektif diterapkan langsung di elemen agar child bisa pakai translateZ */
+  perspective: 900px;
+  will-change: transform, box-shadow;
+  transition:
+    transform          0.08s linear,
+    box-shadow         0.08s linear;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;  /* supaya glare tidak bocor */
+}
+
+/* State aktif saat mouse di atas */
+[data-card3d].c3d-active {
+  transform:
+    scale3d(var(--c3d-scale), var(--c3d-scale), var(--c3d-scale))
+    rotateX(var(--c3d-rotX))
+    rotateY(var(--c3d-rotY))
+    translateZ(var(--c3d-lift));
+  box-shadow:
+    var(--c3d-shadowX) var(--c3d-shadowY) var(--c3d-shadowBlur) 0px rgba(0,0,80,0.28),
+    0 0 0 1.5px rgba(51,51,255,0.18),
+    inset 0 1px 0 rgba(255,255,255,0.72);
+}
+
+/* Reset smooth saat mouse keluar */
+[data-card3d].c3d-leaving {
+  transition:
+    transform 0.65s cubic-bezier(0.22, 0.68, 0, 1.2),
+    box-shadow 0.65s cubic-bezier(0.22, 0.68, 0, 1.2);
+  transform: scale3d(1,1,1) rotateX(0deg) rotateY(0deg) translateZ(0px);
+  box-shadow:
+    0 4px 24px rgba(0,0,80,0.10),
+    0 0 0 1px rgba(51,51,255,0.06),
+    inset 0 1px 0 rgba(255,255,255,0.55);
+}
+
+/* Glare highlight layer */
+[data-card3d]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at var(--c3d-glareX) var(--c3d-glareY),
+    rgba(255,255,255,0.28) 0%,
+    rgba(255,255,255,0.10) 28%,
+    transparent 65%
+  );
+  opacity: var(--c3d-glareOp);
+  transition: opacity 0.08s linear;
+  mix-blend-mode: screen;
+}
+
+/* Shadow tracking — elemen pseudo di bawah card */
+[data-card3d]::before {
+  content: '';
+  position: absolute;
+  inset: 6% 8%;
+  bottom: -18px;
+  z-index: -1;
+  border-radius: inherit;
+  background: transparent;
+  box-shadow:
+    var(--c3d-shadowX) calc(var(--c3d-shadowY) + 12px) calc(var(--c3d-shadowBlur) + 8px) -4px rgba(0,0,80,0.22);
+  transition:
+    box-shadow 0.08s linear;
+  pointer-events: none;
+}
+
+/* Child-depth lift saat card aktif — konten terasa melayang */
+[data-card3d].c3d-active .pi-img-area,
+[data-card3d].c3d-active .dk-img-area,
+[data-card3d].c3d-active .shop-3d-frame,
+[data-card3d].c3d-active .about-card,
+[data-card3d].c3d-active .cr-card {
+  transform: translateZ(28px);
+  transition: transform 0.08s linear;
+}
+[data-card3d].c3d-leaving .pi-img-area,
+[data-card3d].c3d-leaving .dk-img-area,
+[data-card3d].c3d-leaving .shop-3d-frame,
+[data-card3d].c3d-leaving .about-card,
+[data-card3d].c3d-leaving .cr-card {
+  transform: translateZ(0px);
+  transition: transform 0.65s cubic-bezier(0.22, 0.68, 0, 1.2);
+}
+
+/* Shimmer border tracing saat aktif */
+[data-card3d].c3d-active .cm {
+  border-color: rgba(80,80,255,0.85);
+  transition: border-color 0.12s ease;
+}
+
+/* Reduced motion override */
+@media (prefers-reduced-motion: reduce) {
+  [data-card3d],
+  [data-card3d].c3d-active,
+  [data-card3d].c3d-leaving {
+    transform: none !important;
+    transition: none !important;
+  }
+  [data-card3d]::after {
+    display: none !important;
+  }
+}
+
 /* ── REDUCED MOTION ── */
 @media(prefers-reduced-motion:reduce){
   *{animation:none!important;transition:none!important;}
@@ -1835,6 +1964,133 @@ body{display:flex;flex-direction:column;height:100dvh;}
     }
   };
 
+
+  // ── Card3D — Premium 3D Tilt Controller ──────────────────────
+  // Smooth pointer-tracking tilt + glare + shadow shift
+  // Berlaku untuk semua [data-card3d] section
+  const Card3D = {
+    // Tuning parameters
+    MAX_TILT:    14,    // derajat maks rotasi X/Y
+    SCALE_UP:    1.028, // scale saat hover
+    LIFT_PX:     '6px', // translateZ saat hover
+    GLARE_OP:    0.55,  // max glare opacity
+    SHADOW_MULT: 1.4,   // pengali shadow tracking
+    RAF_ID:      null,
+    TOUCH_SUPP:  false,
+
+    init() {
+      // Deteksi touch-only device — nonaktifkan tilt
+      this.TOUCH_SUPP = window.matchMedia('(hover: none)').matches;
+      if (this.TOUCH_SUPP) return;
+
+      const cards = document.querySelectorAll('[data-card3d]');
+      if (!cards.length) return;
+
+      cards.forEach(card => this._bind(card));
+      console.log('[Card3D] Initialized on', cards.length, 'card(s)');
+    },
+
+    _bind(card) {
+      let bounds = null;
+      let rafId  = null;
+
+      const getCenter = (e) => {
+        // Support mouse & touch
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return { clientX, clientY };
+      };
+
+      const update = (e) => {
+        if (!bounds) bounds = card.getBoundingClientRect();
+        const { clientX, clientY } = getCenter(e);
+
+        // Posisi relatif di dalam card, range -1 … +1
+        const rx = ((clientY - bounds.top)  / bounds.height - 0.5) * 2;
+        const ry = ((clientX - bounds.left) / bounds.width  - 0.5) * 2;
+
+        // Rotasi — rx negatif agar tilt arah benar
+        const rotX = -(rx * this.MAX_TILT).toFixed(3);
+        const rotY =  (ry * this.MAX_TILT).toFixed(3);
+
+        // Glare mengikuti pointer
+        const glareX = (((clientX - bounds.left) / bounds.width)  * 100).toFixed(1) + '%';
+        const glareY = (((clientY - bounds.top)  / bounds.height) * 100).toFixed(1) + '%';
+
+        // Shadow offset mengikuti tilt
+        const shadowX = (ry  * 10 * this.SHADOW_MULT).toFixed(1) + 'px';
+        const shadowY = (-rx * 10 * this.SHADOW_MULT + 8).toFixed(1) + 'px';
+        const shadowB = (28 + Math.abs(rx) * 10).toFixed(1) + 'px';
+
+        // Glare intensitas naik di pojok
+        const glareIntensity = (Math.sqrt(rx * rx + ry * ry) * 0.5 * this.GLARE_OP).toFixed(3);
+
+        // Terapkan via CSS custom props — tidak trigger layout
+        card.style.setProperty('--c3d-rotX',      rotX + 'deg');
+        card.style.setProperty('--c3d-rotY',      rotY + 'deg');
+        card.style.setProperty('--c3d-glareX',    glareX);
+        card.style.setProperty('--c3d-glareY',    glareY);
+        card.style.setProperty('--c3d-glareOp',   glareIntensity);
+        card.style.setProperty('--c3d-shadowX',   shadowX);
+        card.style.setProperty('--c3d-shadowY',   shadowY);
+        card.style.setProperty('--c3d-shadowBlur',shadowB);
+        card.style.setProperty('--c3d-scale',     this.SCALE_UP);
+        card.style.setProperty('--c3d-lift',      this.LIFT_PX);
+      };
+
+      const onEnter = (e) => {
+        bounds = card.getBoundingClientRect();
+        card.classList.remove('c3d-leaving');
+        card.classList.add('c3d-active');
+        update(e);
+      };
+
+      const onMove = (e) => {
+        if (!card.classList.contains('c3d-active')) return;
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => {
+          update(e);
+          rafId = null;
+        });
+      };
+
+      const onLeave = () => {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = null;
+        card.classList.remove('c3d-active');
+        card.classList.add('c3d-leaving');
+
+        // Reset custom props setelah transisi selesai
+        card.style.setProperty('--c3d-rotX',      '0deg');
+        card.style.setProperty('--c3d-rotY',      '0deg');
+        card.style.setProperty('--c3d-glareOp',   '0');
+        card.style.setProperty('--c3d-shadowX',   '0px');
+        card.style.setProperty('--c3d-shadowY',   '8px');
+        card.style.setProperty('--c3d-shadowBlur','32px');
+        card.style.setProperty('--c3d-scale',     '1');
+        card.style.setProperty('--c3d-lift',      '0px');
+
+        // Hapus class leaving setelah transisi (0.65s)
+        setTimeout(() => card.classList.remove('c3d-leaving'), 680);
+        bounds = null;
+      };
+
+      card.addEventListener('mouseenter',  onEnter, { passive: true });
+      card.addEventListener('mousemove',   onMove,  { passive: true });
+      card.addEventListener('mouseleave',  onLeave, { passive: true });
+
+      // Re-cache bounds saat window resize
+      let resizeRaf = null;
+      window.addEventListener('resize', () => {
+        if (resizeRaf) cancelAnimationFrame(resizeRaf);
+        resizeRaf = requestAnimationFrame(() => {
+          bounds = null;
+          resizeRaf = null;
+        });
+      }, { passive: true });
+    }
+  };
+
   // ── Bootstrap ─────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
     const scroller = document.getElementById('scroller');
@@ -1844,6 +2100,7 @@ body{display:flex;flex-direction:column;height:100dvh;}
     ShopTilt.init();
     ParallaxHero.init(scroller);
     IntroGate.init();
+    Card3D.init();
   });
 
 })();
@@ -1869,7 +2126,7 @@ ${NOISE_SVG}
   <!-- ════════════════════════════════
        S0: INTRO
   ════════════════════════════════ -->
-  <section id="intro" role="region" aria-label="Intro" tabindex="0">
+  <section data-card3d id="intro" role="region" aria-label="Intro" tabindex="0">
     <!-- God-level sun light effects -->
     <div class="sun-beams" aria-hidden="true"></div>
     <div class="sun-flare" aria-hidden="true"></div>
@@ -1940,7 +2197,7 @@ ${NOISE_SVG}
   <!-- ════════════════════════════════
        S1: SHOP ENTRANCE 3D POV
   ════════════════════════════════ -->
-  <section id="shop-entrance">
+  <section data-card3d id="shop-entrance">
     <div class="shop-3d-wrap">
       <div class="shop-3d-frame">
         <div class="shop-floor grid-bg">
@@ -1980,7 +2237,7 @@ ${NOISE_SVG}
   <!-- ════════════════════════════════
        S2: ABOUT
   ════════════════════════════════ -->
-  <section id="about">
+  <section data-card3d id="about">
     <div class="about-card grid-bg">
       ${cm()}
       <div class="about-blob-r"></div>
@@ -2003,7 +2260,7 @@ ${NOISE_SVG}
   <!-- ════════════════════════════════
        S3: PASTRY MENU
   ════════════════════════════════ -->
-  <section id="pastry">
+  <section data-card3d id="pastry">
     ${PASTRIES.map(pastryItem).join("\n")}
   </section>
   <div class="sgap"></div>
@@ -2011,7 +2268,7 @@ ${NOISE_SVG}
   <!-- ════════════════════════════════
        S4: DRINKS
   ════════════════════════════════ -->
-  <section id="drinks">
+  <section data-card3d id="drinks">
     <div class="dk-hcard rv">
       <div class="dk-hgrid"></div>
       <div class="dk-blob-top"></div>
@@ -2028,7 +2285,7 @@ ${NOISE_SVG}
   <!-- ════════════════════════════════
        S5: CREDITS
   ════════════════════════════════ -->
-  <section id="credits">
+  <section data-card3d id="credits">
     <div class="cr-card">
       <div class="cr-grid"></div>
       <div class="cr-glow"></div>
